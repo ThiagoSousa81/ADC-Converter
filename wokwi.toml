@@ -1,4 +1,4 @@
 [wokwi]
 version = 1
-firmware = 'build/Interfaces-Embarcatech.uf2'
-elf = 'build/Interfaces-Embarcatech.elf'
+firmware = 'build/ADC-Converter.uf2'
+elf = 'build/ADC-Converter.elf'
