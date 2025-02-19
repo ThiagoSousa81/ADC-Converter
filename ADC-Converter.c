@@ -181,7 +181,7 @@ int main()
 
     if (!(adc_value_y > 4079) || !(adc_value_y < 31))
     {
-      pwm_set_chan_level(slice_num_B, channel_B, us_to_level(fabs(adc_value_x)));
+      pwm_set_chan_level(slice_num_B, channel_B, us_to_level(fabs(adc_value_y)));
     }
     else
     {
