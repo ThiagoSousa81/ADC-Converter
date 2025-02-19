@@ -26,30 +26,55 @@
 #define JOYSTICK_PB 22 // GPIO para botão do Joystick
 #define Botao_A 5 // GPIO para botão A
 
+#define LED_G 11 // GPIO para LED Verde
 
-//Trecho para modo BOOTSEL com botão B
-#include "pico/bootrom.h"
+// Tempo para debounce
+static volatile uint32_t last_time = 0;
+
+// Estado do LED verde
+bool led_green_state = false;
+
 #define botaoB 6
+
+
 void gpio_irq_handler(uint gpio, uint32_t events)
 {
-  reset_usb_boot(0, 0);
+  // Obtém o tempo atual em microssegundos
+  uint32_t current_time = to_us_since_boot(get_absolute_time());
+  // Verifica se passou tempo suficiente desde o último evento
+  if (current_time - last_time > 200000) // 200 ms de debouncing
+  {
+    if (gpio == JOYSTICK_PB)
+    {
+      // Altera o estado do LED verde      
+      led_green_state = !led_green_state;
+      printf("Estado do LED: %s\n", led_green_state ? "ON" : "OFF");
+      gpio_put(LED_G, led_green_state);      
+      last_time = current_time; // Atualiza o tempo do último evento
+    }        
+  }
 }
 
 int main()
 {
+  stdio_init_all();
+
+  gpio_init(LED_G);
+  gpio_set_dir(LED_G, GPIO_OUT);  
+
   // Para ser utilizado o modo BOOTSEL com botão B
   gpio_init(botaoB);
   gpio_set_dir(botaoB, GPIO_IN);
-  gpio_pull_up(botaoB);
-  gpio_set_irq_enabled_with_callback(botaoB, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
+  gpio_pull_up(botaoB);  
 
   gpio_init(JOYSTICK_PB);
   gpio_set_dir(JOYSTICK_PB, GPIO_IN);
   gpio_pull_up(JOYSTICK_PB); 
+  gpio_set_irq_enabled_with_callback(JOYSTICK_PB, GPIO_IRQ_EDGE_FALL, true, &gpio_irq_handler);
 
   gpio_init(Botao_A);
   gpio_set_dir(Botao_A, GPIO_IN);
-  gpio_pull_up(Botao_A);
+  gpio_pull_up(Botao_A);  
 
   // I2C Initialisation. Using it at 400Khz.
   i2c_init(I2C_PORT, 400 * 1000);
@@ -104,7 +129,7 @@ int main()
     ssd1306_draw_string(&ssd, str_y, 49, 52); // Desenha uma string   
     ssd1306_rect(&ssd, 52, 90, 8, 8, cor, !gpio_get(JOYSTICK_PB)); // Desenha um retângulo  
     ssd1306_rect(&ssd, 52, 102, 8, 8, cor, !gpio_get(Botao_A)); // Desenha um retângulo    
-    ssd1306_rect(&ssd, 52, 114, 8, 8, cor, !cor); // Desenha um retângulo       
+    ssd1306_rect(&ssd, 52, 114, 8, 8, cor, !gpio_get(botaoB)); // Desenha um retângulo       
     ssd1306_send_data(&ssd); // Atualiza o display
 
 
