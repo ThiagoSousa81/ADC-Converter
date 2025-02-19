@@ -11,12 +11,17 @@
 */
 
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/i2c.h"
 #include "lib/ssd1306.h"
 #include "lib/font.h"
+
+#include "hardware/pwm.h"
+#include "hardware/clocks.h"
+
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
@@ -26,7 +31,9 @@
 #define JOYSTICK_PB 22 // GPIO para botão do Joystick
 #define Botao_A 5 // GPIO para botão A
 
+#define LED_R 13 // GPIO para LED Vermelho
 #define LED_G 11 // GPIO para LED Verde
+#define LED_B 12 // GPIO para LED Azul
 
 // Tempo para debounce
 static volatile uint32_t last_time = 0;
@@ -34,8 +41,13 @@ static volatile uint32_t last_time = 0;
 // Estado do LED verde
 bool led_green_state = false;
 
-#define botaoB 6
+// Estado do PWM
+bool state_PWM = true;
 
+// Atualização das constantes...
+#define PWM_FREQ 50        // Frequência do sinal de PWM em 50 Hz
+#define CLK_DIV 100.0f     // Divisor de clock escolhido
+#define WRAP_VALUE 24999   // (125.000.000Hz / (100 * 50Hz)) - 1 = 24999
 
 void gpio_irq_handler(uint gpio, uint32_t events)
 {
@@ -48,24 +60,50 @@ void gpio_irq_handler(uint gpio, uint32_t events)
     {
       // Altera o estado do LED verde      
       led_green_state = !led_green_state;
-      printf("Estado do LED: %s\n", led_green_state ? "ON" : "OFF");
+      //printf("Estado do LED: %s\n", led_green_state ? "ON" : "OFF");
       gpio_put(LED_G, led_green_state);      
-      last_time = current_time; // Atualiza o tempo do último evento
-    }        
+      
+    }
+    else if (gpio == Botao_A)
+    {
+      state_PWM = !state_PWM;
+    }
+    last_time = current_time; // Atualiza o tempo do último evento
   }
+}
+
+// Função de conversão
+uint32_t us_to_level(uint32_t us) {
+  // Cada unidade = (20ms / 25000) = 0.8µs
+  return (uint32_t)(us * 1.25f); // 1µs = 1.25 unidades
 }
 
 int main()
 {
   stdio_init_all();
+  set_sys_clock_khz(125000, true);  // Clock em 125 MHz
 
   gpio_init(LED_G);
   gpio_set_dir(LED_G, GPIO_OUT);  
 
-  // Para ser utilizado o modo BOOTSEL com botão B
-  gpio_init(botaoB);
-  gpio_set_dir(botaoB, GPIO_IN);
-  gpio_pull_up(botaoB);  
+  gpio_set_function(LED_R, GPIO_FUNC_PWM);
+  gpio_set_function(LED_B, GPIO_FUNC_PWM);
+  
+  uint slice_num_R = pwm_gpio_to_slice_num(LED_R);
+  uint slice_num_B = pwm_gpio_to_slice_num(LED_B);
+
+  uint channel_R = pwm_gpio_to_channel(LED_R);
+  uint channel_B = pwm_gpio_to_channel(LED_B);
+
+  // Configura e inicia o PWM 
+  pwm_config config = pwm_get_default_config();
+  pwm_config_set_clkdiv(&config, CLK_DIV);
+  pwm_config_set_wrap(&config, WRAP_VALUE);
+
+  pwm_init(slice_num_R, &config, true);
+  pwm_init(slice_num_B, &config, true);
+
+
 
   gpio_init(JOYSTICK_PB);
   gpio_set_dir(JOYSTICK_PB, GPIO_IN);
@@ -129,8 +167,28 @@ int main()
     ssd1306_draw_string(&ssd, str_y, 49, 52); // Desenha uma string   
     ssd1306_rect(&ssd, 52, 90, 8, 8, cor, !gpio_get(JOYSTICK_PB)); // Desenha um retângulo  
     ssd1306_rect(&ssd, 52, 102, 8, 8, cor, !gpio_get(Botao_A)); // Desenha um retângulo    
-    ssd1306_rect(&ssd, 52, 114, 8, 8, cor, !gpio_get(botaoB)); // Desenha um retângulo       
+    ssd1306_rect(&ssd, 52, 114, 8, 8, cor, !cor); // Desenha um retângulo       
     ssd1306_send_data(&ssd); // Atualiza o display
+
+    if (!(adc_value_x > 4079) || !(adc_value_x < 31))
+    {
+      pwm_set_chan_level(slice_num_R, channel_R, us_to_level(fabs(adc_value_x)));
+    }
+    else
+    {
+      pwm_set_chan_level(slice_num_R, channel_R, us_to_level(24999));
+    }
+
+    if (!(adc_value_y > 4079) || !(adc_value_y < 31))
+    {
+      pwm_set_chan_level(slice_num_B, channel_B, us_to_level(fabs(adc_value_x)));
+    }
+    else
+    {
+      pwm_set_chan_level(slice_num_B, channel_B, us_to_level(24999));
+    }
+    
+
 
 
     sleep_ms(100);

@@ -31,7 +31,7 @@ pico_set_program_name(ADC-Converter "ADC-Converter")
 pico_set_program_version(ADC-Converter "0.1")
 pico_enable_stdio_uart(ADC-Converter 0)
 pico_enable_stdio_usb(ADC-Converter 1)
-target_link_libraries(ADC-Converter pico_stdlib hardware_i2c hardware_adc)
+target_link_libraries(ADC-Converter pico_stdlib hardware_i2c hardware_adc hardware_pwm hardware_clocks)
 target_include_directories(ADC-Converter PRIVATE   ${CMAKE_CURRENT_LIST_DIR})
 pico_add_extra_outputs(ADC-Converter)
 
